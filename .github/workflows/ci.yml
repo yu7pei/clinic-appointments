@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: API tests (Postman collection via Newman)
+        run: |
+          DATABASE_PATH="$RUNNER_TEMP/ci.db" node dist/server.js &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/docs/json >/dev/null && break
+            sleep 1
+          done
+          npm run test:api
+          kill "$SERVER_PID"

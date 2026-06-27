@@ -1,0 +1,36 @@
+{
+  "name": "clinic-appointments",
+  "version": "1.0.0",
+  "description": "A simplified clinic appointment system backend (TypeScript + Fastify).",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:api": "newman run postman/clinic-appointments.postman_collection.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/swagger": "^9.4.0",
+    "@fastify/swagger-ui": "^5.2.0",
+    "better-sqlite3": "^12.11.1",
+    "fastify": "^5.2.0",
+    "fastify-type-provider-zod": "^4.0.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.10.5",
+    "@vitest/coverage-v8": "^2.1.9",
+    "newman": "^6.2.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

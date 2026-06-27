@@ -1,0 +1,15 @@
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # SQLite persisted on a named volume so data survives container restarts.
+      DATABASE_PATH: /app/data/clinic.db
+      PORT: "3000"
+    volumes:
+      - clinic-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  clinic-data:

@@ -1,0 +1,347 @@
+{
+  "info": {
+    "_postman_id": "c1a9b3d2-7e6f-4a10-9b2c-clinic0001000",
+    "name": "Clinic Appointment System",
+    "description": "End-to-end runnable collection for the Clinic Appointment System API.\n\nHow to use:\n1. Start the API: `npm run dev` (defaults to http://localhost:3000).\n2. Import this collection into Postman.\n3. Run the whole collection (Runner) top-to-bottom, or fire requests individually.\n\nThe `Create appointment (success)` request must run before the overlap/list checks, because the collection chains data (booked time window + created id) into later requests via collection variables. `Create` requests generate a *future* time window in a pre-request script so they are never rejected as past appointments. Every request carries test assertions.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" },
+    { "key": "clinicianId", "value": "clin-1", "type": "string" },
+    { "key": "patientId", "value": "pat-1", "type": "string" },
+    { "key": "bookedStart", "value": "", "type": "string" },
+    { "key": "bookedEnd", "value": "", "type": "string" },
+    { "key": "appointmentId", "value": "", "type": "string" },
+    { "key": "rangeFrom", "value": "", "type": "string" },
+    { "key": "rangeTo", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Appointments",
+      "item": [
+        {
+          "name": "Create appointment (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Book tomorrow at 09:00 UTC so the request is always in the future.",
+                  "const start = new Date(Date.now() + 24 * 60 * 60 * 1000);",
+                  "start.setUTCHours(9, 0, 0, 0);",
+                  "const end = new Date(start.getTime() + 30 * 60 * 1000);",
+                  "pm.collectionVariables.set('bookedStart', start.toISOString());",
+                  "pm.collectionVariables.set('bookedEnd', end.toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('appointmentId', body.id);",
+                  "pm.test('returns the booked appointment for the clinician', () => {",
+                  "  pm.expect(body.clinicianId).to.eql(pm.collectionVariables.get('clinicianId'));",
+                  "  pm.expect(body.start).to.eql(pm.collectionVariables.get('bookedStart'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clinicianId\": \"{{clinicianId}}\",\n  \"patientId\": \"{{patientId}}\",\n  \"start\": \"{{bookedStart}}\",\n  \"end\": \"{{bookedEnd}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointments"]
+            },
+            "description": "Books an appointment. Returns 201 with the created resource."
+          }
+        },
+        {
+          "name": "Create appointment - overlap (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error code is CONFLICT', () => {",
+                  "  pm.expect(pm.response.json().error.code).to.eql('CONFLICT');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clinicianId\": \"{{clinicianId}}\",\n  \"patientId\": \"pat-2\",\n  \"start\": \"{{bookedStart}}\",\n  \"end\": \"{{bookedEnd}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointments"]
+            },
+            "description": "Re-books the exact same window for the same clinician (different patient). Expects 409 Conflict. Run `Create appointment (201)` first."
+          }
+        },
+        {
+          "name": "Create appointment - back-to-back (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Starts exactly where the booked slot ends: touching endpoints are allowed.",
+                  "const start = new Date(pm.collectionVariables.get('bookedEnd'));",
+                  "const end = new Date(start.getTime() + 30 * 60 * 1000);",
+                  "pm.collectionVariables.set('adjacentStart', start.toISOString());",
+                  "pm.collectionVariables.set('adjacentEnd', end.toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201 (touching is not overlapping)', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clinicianId\": \"{{clinicianId}}\",\n  \"patientId\": \"pat-3\",\n  \"start\": \"{{adjacentStart}}\",\n  \"end\": \"{{adjacentEnd}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointments"]
+            },
+            "description": "An appointment starting exactly when the previous one ends. Half-open intervals make this legal, so it returns 201."
+          }
+        },
+        {
+          "name": "Create appointment - invalid input (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error code is VALIDATION_ERROR', () => {",
+                  "  pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clinicianId\": \"{{clinicianId}}\",\n  \"patientId\": \"{{patientId}}\",\n  \"start\": \"2030-01-01T09:00:00\",\n  \"end\": \"2030-01-01T09:30:00\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointments"]
+            },
+            "description": "Timezone-naive datetimes (no Z / offset) are rejected with 400."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clinician schedule",
+      "item": [
+        {
+          "name": "List clinician appointments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns a JSON array', () => {",
+                  "  pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clinicians/{{clinicianId}}/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["clinicians", "{{clinicianId}}", "appointments"]
+            },
+            "description": "A clinician's upcoming appointments (start >= now)."
+          }
+        },
+        {
+          "name": "List clinician appointments - date range",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const from = new Date();",
+                  "from.setUTCHours(0, 0, 0, 0);",
+                  "const to = new Date(from.getTime() + 7 * 24 * 60 * 60 * 1000);",
+                  "pm.collectionVariables.set('rangeFrom', from.toISOString());",
+                  "pm.collectionVariables.set('rangeTo', to.toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('every result starts within the window', () => {",
+                  "  const from = Date.parse(pm.collectionVariables.get('rangeFrom'));",
+                  "  const to = Date.parse(pm.collectionVariables.get('rangeTo'));",
+                  "  pm.response.json().forEach((a) => {",
+                  "    const t = Date.parse(a.start);",
+                  "    pm.expect(t).to.be.at.least(from);",
+                  "    pm.expect(t).to.be.below(to);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clinicians/{{clinicianId}}/appointments?from={{rangeFrom}}&to={{rangeTo}}&limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["clinicians", "{{clinicianId}}", "appointments"],
+              "query": [
+                { "key": "from", "value": "{{rangeFrom}}" },
+                { "key": "to", "value": "{{rangeTo}}" },
+                { "key": "limit", "value": "50" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Filters the clinician's appointments to a [from, to) window, with paging."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "List all upcoming (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns a JSON array', () => {",
+                  "  pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Role", "value": "admin" }],
+            "url": {
+              "raw": "{{baseUrl}}/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointments"]
+            },
+            "description": "Admin-only view of all upcoming appointments across clinicians."
+          }
+        },
+        {
+          "name": "List all upcoming - forbidden (patient)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error code is FORBIDDEN', () => {",
+                  "  pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Role", "value": "patient" }],
+            "url": {
+              "raw": "{{baseUrl}}/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointments"]
+            },
+            "description": "A non-admin role is rejected with 403."
+          }
+        },
+        {
+          "name": "List all upcoming - missing role (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointments"]
+            },
+            "description": "No role supplied at all -> 400."
+          }
+        }
+      ]
+    }
+  ]
+}
